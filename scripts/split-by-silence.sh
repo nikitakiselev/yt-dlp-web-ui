@@ -14,7 +14,7 @@ DUR="0.8"       # minimum pause length in seconds to treat as a track boundary
 MINLEN="0"      # drop a split that would make a track shorter than this many seconds (0 = off)
 REENCODE=0      # 1 = re-encode (sample-accurate); 0 = stream copy (fast, lossless)
 DELETE=0        # 1 = delete the source file, but ONLY after a successful split
-PREFIX=""       # track-name prefix; default = source filename (whitespace-trimmed)
+PREFIX=""       # track-name prefix; default = source filename without extension
 OUTDIR=""
 
 usage() {
@@ -53,8 +53,6 @@ FILE="$1"
 
 ext="${FILE##*.}"
 base="$(basename "$FILE")"; base="${base%.*}"
-# strip leading/trailing whitespace from the title — YouTube titles sometimes carry it
-base="$(printf '%s' "$base" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 OUTDIR="${OUTDIR:-$(dirname "$FILE")/$base}"
 PREFIX="${PREFIX:-$base}"
 

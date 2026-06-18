@@ -84,11 +84,9 @@ func userSetsDefaultOutput(params []string) bool {
 // This approach is anyhow not perfect: quotes are not escaped properly.
 // Each process is not identified by its PID but by a UUIDv4
 func (p *Process) Start() {
-	// single-user, self-hosted: don't filter arguments. They go straight to
-	// exec.Command without a shell, so shell metacharacters are inert anyway.
-	p.Params = slices.DeleteFunc(p.Params, func(e string) bool {
-		return e == ""
-	})
+	// single-user, self-hosted: pass arguments through untouched. They go to
+	// exec.Command without a shell (shell metacharacters are inert), and we keep
+	// intentional empty args such as the "" replacement in --replace-in-metadata.
 
 	out := DownloadOutput{
 		Path:     config.Instance().DownloadPath,

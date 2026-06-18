@@ -42,15 +42,19 @@ export class RPCClient {
   }
 
   private argsSanitizer(args: string): string[] {
-    const splitOnlyWhitespaces = /[^\s"']+|"([^"]*)"|'([^']*)'/gm
-
-    return args
-      .match(splitOnlyWhitespaces)
-      ?.map(a => a.trim())
-      // strip a single pair of surrounding quotes so quoted values (e.g. paths
-      // with spaces) reach yt-dlp unquoted instead of with literal quote chars
-      .map(a => a.replace(/^(["'])(.*)\1$/, '$2'))
-      .filter(Boolean) ?? []
+    // Tokenize on whitespace but keep quoted groups together. Quoted tokens are
+    // emitted with their quotes stripped and preserved even when empty — so an
+    // explicit "" (e.g. the empty replacement in --replace-in-metadata) survives.
+    // Bare tokens are dropped only when empty/whitespace.
+    const tokenize = /[^\s"']+|"([^"]*)"|'([^']*)'/g
+    const out: string[] = []
+    let m: RegExpExecArray | null
+    while ((m = tokenize.exec(args)) !== null) {
+      if (m[1] !== undefined) out.push(m[1])
+      else if (m[2] !== undefined) out.push(m[2])
+      else if (m[0].trim() !== '') out.push(m[0].trim())
+    }
+    return out
   }
 
   private async sendHTTP<T>(req: RPCRequest) {
