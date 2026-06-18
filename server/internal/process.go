@@ -227,11 +227,23 @@ func (p *Process) detectYtDlpErrors(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
-		slog.Error("yt-dlp process error",
+		line := scanner.Text()
+		attrs := []any{
 			slog.String("id", p.getShortId()),
 			slog.String("url", p.Url),
-			slog.String("err", scanner.Text()),
-		)
+			slog.String("line", line),
+		}
+		// yt-dlp prefixes diagnostics with "ERROR:" / "WARNING:". Only real
+		// errors should be logged at error level — otherwise harmless notices
+		// (e.g. the YouTube SABR warning) look like failures.
+		switch {
+		case strings.Contains(line, "ERROR:"):
+			slog.Error("yt-dlp error", attrs...)
+		case strings.Contains(line, "WARNING:"):
+			slog.Warn("yt-dlp warning", attrs...)
+		default:
+			slog.Info("yt-dlp", attrs...)
+		}
 	}
 }
 
