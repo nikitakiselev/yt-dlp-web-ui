@@ -57,19 +57,35 @@ type Process struct {
 	proc       *os.Process
 }
 
+// typedOutputRe matches a yt-dlp typed output template, e.g. "chapter:...",
+// "thumbnail:...". Such an -o sets the template for that output type only and
+// leaves the default template untouched.
+var typedOutputRe = regexp.MustCompile(`^[a-z_]+:`)
+
+// userSetsDefaultOutput reports whether the user already controls the default
+// output location, in which case the backend must not inject its own -o.
+// -P/--paths set the output directory; an -o/--output whose value has no
+// "type:" prefix sets the default filename template.
+func userSetsDefaultOutput(params []string) bool {
+	if slices.Contains(params, "-P") || slices.Contains(params, "--paths") {
+		return true
+	}
+	for i, a := range params {
+		if (a == "-o" || a == "--output") && i+1 < len(params) && !typedOutputRe.MatchString(params[i+1]) {
+			return true
+		}
+	}
+	return false
+}
+
 // Starts spawns/forks a new yt-dlp process and parse its stdout.
 // The process is spawned to outputting a custom progress text that
 // Resembles a JSON Object in order to Unmarshal it later.
 // This approach is anyhow not perfect: quotes are not escaped properly.
 // Each process is not identified by its PID but by a UUIDv4
 func (p *Process) Start() {
-	// escape bash variable escaping and command piping, you'll never know
-	// what they might come with...
-	p.Params = slices.DeleteFunc(p.Params, func(e string) bool {
-		match, _ := regexp.MatchString(`(\$\{)|(\&\&)`, e)
-		return match
-	})
-
+	// single-user, self-hosted: don't filter arguments. They go straight to
+	// exec.Command without a shell, so shell metacharacters are inert anyway.
 	p.Params = slices.DeleteFunc(p.Params, func(e string) bool {
 		return e == ""
 	})
@@ -103,10 +119,13 @@ func (p *Process) Start() {
 		"--no-exec",
 	}
 
-	// if user asked to manually override the output path...
-	if !(slices.Contains(p.Params, "-P") || slices.Contains(p.Params, "--paths")) {
-		p.Params = append(p.Params, "-o")
-		p.Params = append(p.Params, fmt.Sprintf("%s/%s", out.Path, out.Filename))
+	// Force a default output template so the main file lands in DownloadPath,
+	// UNLESS the user already controls the default output themselves. A *typed*
+	// -o (e.g. "chapter:...") doesn't set the default, so ours is still added
+	// alongside it — that's what makes --split-chapters land in a per-title
+	// folder while the full file stays in DownloadPath.
+	if !userSetsDefaultOutput(p.Params) {
+		p.Params = append(p.Params, "-o", fmt.Sprintf("%s/%s", out.Path, out.Filename))
 	}
 
 	params := append(baseParams, p.Params...)

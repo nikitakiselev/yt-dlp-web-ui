@@ -47,6 +47,9 @@ export class RPCClient {
     return args
       .match(splitOnlyWhitespaces)
       ?.map(a => a.trim())
+      // strip a single pair of surrounding quotes so quoted values (e.g. paths
+      // with spaces) reach yt-dlp unquoted instead of with literal quote chars
+      .map(a => a.replace(/^(["'])(.*)\1$/, '$2'))
       .filter(Boolean) ?? []
   }
 
@@ -71,23 +74,10 @@ export class RPCClient {
       return
     }
 
-    const rename = req.args.includes('-o')
-      ? req.args
-        .substring(req.args.indexOf('-o'))
-        .replaceAll("'", '')
-        .replaceAll('"', '')
-        .split('-o')
-        .map(s => s.trim())
-        .join('')
-        .split(' ')
-        .at(0) ?? ''
-      : ''
-
-    const sanitizedArgs = this.argsSanitizer(
-      req.args
-        .replace('-o', '')
-        .replace(rename, '')
-    )
+    // Pass custom args straight through to yt-dlp. A -o here (including typed
+    // ones like "chapter:...") is no longer hijacked into Rename — use the
+    // dedicated filename field for the default output name instead.
+    const sanitizedArgs = this.argsSanitizer(req.args)
 
     if (req.playlist) {
       return this.sendHTTP({
@@ -96,7 +86,7 @@ export class RPCClient {
           URL: req.url,
           Params: sanitizedArgs,
           Path: req.pathOverride,
-          Rename: req.renameTo || rename,
+          Rename: req.renameTo,
         }]
       })
     }
@@ -106,7 +96,7 @@ export class RPCClient {
         URL: req.url.split('?list').at(0)!,
         Params: sanitizedArgs,
         Path: req.pathOverride,
-        Rename: req.renameTo || rename,
+        Rename: req.renameTo,
       }]
     })
   }
