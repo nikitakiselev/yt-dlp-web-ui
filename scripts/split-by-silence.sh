@@ -14,6 +14,7 @@ DUR="0.8"       # minimum pause length in seconds to treat as a track boundary
 MINLEN="0"      # drop a split that would make a track shorter than this many seconds (0 = off)
 REENCODE=0      # 1 = re-encode (sample-accurate); 0 = stream copy (fast, lossless)
 DELETE=0        # 1 = delete the source file, but ONLY after a successful split
+PREFIX=""       # track-name prefix; default = source filename (whitespace-trimmed)
 OUTDIR=""
 
 usage() {
@@ -26,18 +27,20 @@ Usage: $(basename "$0") [-n NOISE] [-d DUR] [-m MINLEN] [-r] [-o OUTDIR] <audiof
              — helps avoid splitting on quiet passages inside a track
   -r         re-encode for sample-accurate cuts (default: stream copy, instant & lossless)
   -D         delete the source file after a SUCCESSFUL split (kept if no pauses found)
+  -p PREFIX  track filename prefix (default: source filename) — files are "<PREFIX> - Track NN.ext"
   -o OUTDIR  output directory (default: a folder named after the input file, next to it)
 EOF
   exit 1
 }
 
-while getopts "n:d:m:rDo:h" opt; do
+while getopts "n:d:m:rDp:o:h" opt; do
   case "$opt" in
     n) NOISE="$OPTARG" ;;
     d) DUR="$OPTARG" ;;
     m) MINLEN="$OPTARG" ;;
     r) REENCODE=1 ;;
     D) DELETE=1 ;;
+    p) PREFIX="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
     *) usage ;;
   esac
@@ -50,7 +53,10 @@ FILE="$1"
 
 ext="${FILE##*.}"
 base="$(basename "$FILE")"; base="${base%.*}"
+# strip leading/trailing whitespace from the title — YouTube titles sometimes carry it
+base="$(printf '%s' "$base" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 OUTDIR="${OUTDIR:-$(dirname "$FILE")/$base}"
+PREFIX="${PREFIX:-$base}"
 
 total="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$FILE")"
 
@@ -91,13 +97,14 @@ echo "Found $((ntracks - 1)) pause(s) -> $ntracks tracks; writing to: $OUTDIR/" 
 
 printf '%s\n' "$segments" | while read -r idx start end; do
   dur="$(awk "BEGIN { printf \"%.6f\", $end - $start }")"
-  out="$OUTDIR/$(printf '%02d' "$idx").${ext}"
+  title="${PREFIX} - Track $(printf '%02d' "$idx")"
+  out="$OUTDIR/${title}.${ext}"
   if [ "$REENCODE" -eq 1 ]; then
     ffmpeg -nostdin -hide_banner -loglevel error -y -ss "$start" -i "$FILE" -t "$dur" \
-           -metadata track="$idx" "$out"
+           -metadata track="$idx" -metadata title="$title" "$out"
   else
     ffmpeg -nostdin -hide_banner -loglevel error -y -ss "$start" -i "$FILE" -t "$dur" \
-           -c copy -metadata track="$idx" "$out"
+           -c copy -metadata track="$idx" -metadata title="$title" "$out"
   fi
   printf '  %s  [%ss -> %ss]\n' "$out" "$start" "$end" >&2
 done
