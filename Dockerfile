@@ -45,4 +45,12 @@ RUN chmod +x /usr/local/bin/split-by-silence.sh
 ENV JWT_SECRET=secret
 
 EXPOSE 3033
+
+# Run as a non-root uid so downloaded files are owned by 1000:1000.
+# Across the unprivileged LXC hosts this matches the shared media-library
+# user (AzuraCast and other consumers also run as uid 1000), so files written
+# to the shared library are usable without any post-download chown.
+# Must come after all RUN/COPY/chmod steps above, which require root.
+USER 1000:1000
+
 ENTRYPOINT [ "./yt-dlp-webui" , "--out", "/downloads", "--conf", "/config/config.yml", "--db", "/config/local.db" ]
