@@ -37,6 +37,11 @@ WORKDIR /app
 
 COPY --from=build /usr/src/yt-dlp-webui/yt-dlp-webui /app
 
+# helper to split a downloaded audio file into tracks at silent gaps,
+# invoked via yt-dlp --exec (see README/CLAUDE.md). POSIX sh, uses busybox awk + ffmpeg.
+COPY scripts/split-by-silence.sh /usr/local/bin/split-by-silence.sh
+RUN chmod +x /usr/local/bin/split-by-silence.sh
+
 ENV JWT_SECRET=secret
 
 EXPOSE 3033

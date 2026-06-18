@@ -56,3 +56,10 @@ All argv construction lives in **`server/internal/process.go`** (`Process.Start`
 4. `exec.Command(config.DownloaderPath, params...)` runs with `Setpgid` and **no explicit working directory** — it inherits the server's cwd (`/app` in Docker). Consequently any yt-dlp output without an absolute path (e.g. `--split-chapters` files when no `chapter:` output template is set) is written relative to `/app`, not `/downloads`.
 
 This function is the place to change behavior such as per-type output templates (e.g. injecting `-o "chapter:<DownloadPath>/…"` for `--split-chapters`).
+
+## Splitting audio into tracks
+
+Two ways, both driven from the UI's custom-args field (no app code involved):
+
+- **Has chapters** (e.g. YouTube videos whose description has timestamps — note only `--extractor-args youtube:player_client=android` exposes them): `--split-chapters` + a typed `-o "chapter:<dir>/%(title)s/%(section_number)02d-%(section_title)s.%(ext)s"`.
+- **No chapters / no tracklist, but pauses between tracks**: download audio normally, then `--exec "after_move:split-by-silence.sh -D %(filepath)q"`. `scripts/split-by-silence.sh` (baked into the image at `/usr/local/bin/`, see Dockerfile) uses ffmpeg `silencedetect` to cut at the midpoint of each pause; `-D` deletes the source only after a successful split. POSIX sh — runs under busybox, no bash needed.
